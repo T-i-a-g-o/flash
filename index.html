@@ -5,26 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Meu App de Flashcards</title>
     <style>
-        body {
+        body, html {
             margin: 0;
             padding: 0;
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            background-color: #f0f0f0; /* Um cinza claro de fundo */
-            font-family: Arial, sans-serif;
-            /* Corrigido para preencher a tela em dispositivos móveis */
-            height: 100vh;
-            overflow: hidden;
+            height: 100%;
+            width: 100%;
+            overflow: hidden; /* Impede o scroll do corpo */
+            background-color: #f0f0f0;
         }
         iframe {
             width: 100%;
-            height: 100%; /* Iframe preenche o body */
+            height: 100%;
             border: none;
-            max-width: 100%;
-            box-sizing: border-box;
-            display: block; /* Remove espaço extra abaixo do iframe */
+            display: block;
         }
         #errorMessage {
             display: none;
@@ -33,20 +26,12 @@
             font-size: 18px;
             margin: 20px;
             padding: 10px;
-            background-color: #fff;
-            border-radius: 5px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            max-width: 90%;
-        }
-         /* Garante que o body e o html preencham a tela */
-        html {
-            height: 100%;
-            overflow: hidden;
+            font-family: Arial, sans-serif;
         }
     </style>
 </head>
 <body>
-    <div id="errorMessage">Erro: Nenhum link de aplicativo válido foi fornecido.</div>
+    <div id="errorMessage">Erro: Nenhum link de app válido foi fornecido.</div>
     <iframe id="appIframe" frameborder="0"></iframe>
 
     <script>
@@ -60,42 +45,13 @@
         const errorMessage = document.getElementById('errorMessage');
 
         if (link) {
-            try {
-                const decodedLink = decodeURIComponent(link);
-                console.log("Link decodificado encontrado: " + decodedLink);
-                
-                // Verifica se o link é https (necessário para GAS)
-                if (decodedLink.startsWith('https://')) {
-                    iframe.src = decodedLink;
-                    
-                    iframe.onload = function() {
-                        console.log("Iframe carregado com sucesso. URL: " + decodedLink);
-                    };
-
-                    iframe.onerror = function() {
-                        console.error("Erro ao carregar o iframe. URL: " + decodedLink);
-                        iframe.style.display = 'none';
-                        errorMessage.style.display = 'block';
-                        errorMessage.textContent = "Erro: Não foi possível carregar o aplicativo. Verifique o link ou a conexão.";
-                    };
-                } else {
-                    throw new Error("Link inválido. O link deve começar com https://");
-                }
-
-            } catch (e) {
-                console.error("Erro ao decodificar ou validar o link:", e);
-                iframe.style.display = 'none';
-                errorMessage.style.display = 'block';
-                errorMessage.textContent = "Erro: O link fornecido é inválido ou mal formatado.";
-            }
+            const decodedLink = decodeURIComponent(link);
+            iframe.src = decodedLink;
         } else {
-            console.log("Nenhum parâmetro 'link' encontrado na URL.");
             iframe.style.display = 'none';
             errorMessage.style.display = 'block';
         }
-
-        // Remove o ajuste de altura fixo e deixa o CSS cuidar disso
-        // O CSS com height: 100% no html, body, e iframe já faz o trabalho.
     </script>
 </body>
 </html>
+
