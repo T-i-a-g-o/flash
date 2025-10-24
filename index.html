@@ -1,685 +1,101 @@
 <!DOCTYPE html>
-<html lang="pt-BR" class="h-full bg-gray-100">
+<html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Meu App de Flashcards</title>
-    <!-- Carrega o Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Carrega a biblioteca de ícones Heroicons -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/heroicons/2.1.1/24/solid/heroicons.min.css" rel="stylesheet">
     <style>
-        /* Estilo para a fonte Inter */
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
         body {
-            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
             min-height: 100vh;
-        }
-
-        /* Estilos para a animação de virar o card */
-        .card-container { perspective: 1000px; }
-        .card-inner {
-            position: relative;
-            width: 100%;
-            height: 100%;
-            transition: transform 0.6s;
-            transform-style: preserve-3d;
-        }
-        .card-container.flipped .card-inner {
-            transform: rotateY(180deg);
-        }
-        .card-face {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            -webkit-backface-visibility: hidden;
-            backface-visibility: hidden;
             display: flex;
-            align-items: center;
             justify-content: center;
-            padding: 24px;
-            border-radius: 0.75rem;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
-            background-color: white;
+            align-items: center;
+            background-color: #f0f0f0; /* Um cinza claro de fundo */
+            font-family: Arial, sans-serif;
+            /* Corrigido para preencher a tela em dispositivos móveis */
+            height: 100vh;
+            overflow: hidden;
         }
-        .card-back {
-            transform: rotateY(180deg);
+        iframe {
+            width: 100%;
+            height: 100%; /* Iframe preenche o body */
+            border: none;
+            max-width: 100%;
+            box-sizing: border-box;
+            display: block; /* Remove espaço extra abaixo do iframe */
         }
-        /* Ajuste para o scroll da barra de decks em telas pequenas */
-        @media (max-width: 767px) {
-            .mobile-deck-scroll {
-                flex-wrap: nowrap;
-                overflow-x: auto;
-                -webkit-overflow-scrolling: touch;
-            }
-            .mobile-deck-scroll::-webkit-scrollbar { display: none; }
+        #errorMessage {
+            display: none;
+            color: red;
+            text-align: center;
+            font-size: 18px;
+            margin: 20px;
+            padding: 10px;
+            background-color: #fff;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            max-width: 90%;
+        }
+         /* Garante que o body e o html preencham a tela */
+        html {
+            height: 100%;
+            overflow: hidden;
         }
     </style>
 </head>
-<body class="h-full flex flex-col md:flex-row overflow-hidden">
+<body>
+    <div id="errorMessage">Erro: Nenhum link de aplicativo válido foi fornecido.</div>
+    <iframe id="appIframe" frameborder="0"></iframe>
 
-    <!-- Barra Lateral (Decks) / Barra Superior (Mobile) -->
-    <aside id="sidebar" class="w-full md:w-72 bg-white shadow-lg flex-shrink-0 flex flex-col p-4 md:h-full overflow-y-auto">
-        <h1 class="text-2xl font-bold text-blue-600 mb-4">Meus Baralhos</h1>
-        
-        <!-- Seção de Autenticação -->
-        <div class="mb-4 p-3 bg-gray-50 rounded-lg border">
-            <label class="block text-xs text-gray-500 mb-1">Status do Usuário:</label>
-            <!-- Estado: Carregando -->
-            <div id="auth-loading" class="flex items-center">
-                <span class="text-sm text-gray-700">Carregando...</span>
-            </div>
-            <!-- Estado: Logado com Conta Permanente -->
-            <div id="auth-loggedin" class="hidden">
-                 <p class="text-sm text-gray-700 font-medium">Bem-vindo(a)!</p>
-                 <p id="userEmailDisplay" class="text-sm text-gray-600 truncate">...</p>
-                 <p class="text-xs text-gray-500 mt-1">Seu ID: <code id="userIdDisplay-loggedin" class="text-xs bg-gray-200 p-1 rounded">...</code></p>
-                 <button id="logoutButton" class="w-full mt-3 bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg text-sm font-medium flex items-center justify-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
-                    </svg>
-                    Sair (Logout)
-                 </button>
-            </div>
-        </div>
-
-        <!-- Novo Baralho -->
-        <div class="mb-4">
-            <h2 class="text-lg font-semibold mb-2">Novo Baralho</h2>
-            <div class="flex">
-                <input type="text" id="deckNameInput" class="flex-grow border border-gray-300 rounded-l-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Nome do Baralho">
-                <button id="createDeckBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold p-2 rounded-r-lg">
-                    <svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                    </svg>
-                </button>
-            </div>
-        </div>
-        
-        <!-- Baralhos Salvos -->
-        <div>
-            <h2 class="text-lg font-semibold mb-2">Baralhos Salvos</h2>
-            <div id="deckList" class="space-y-2 md:space-y-0 md:flex md:flex-wrap md:gap-2 mobile-deck-scroll">
-                <!-- Baralhos serão inseridos aqui pelo JavaScript -->
-                <p id="noDecksMsg" class="text-sm text-gray-500">Nenhum baralho encontrado.</p>
-            </div>
-        </div>
-    </aside>
-
-    <!-- Área Principal (Flashcards) -->
-    <main class="flex-1 bg-gray-100 p-4 md:p-8 flex flex-col overflow-y-auto">
-        
-        <!-- Tela de Boas-vindas (inicial) -->
-        <div id="welcomeScreen" class="flex-1 flex flex-col items-center justify-center text-center">
-            <svg class="w-16 h-16 text-blue-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" />
-            </svg>
-            <h2 class="text-2xl md:text-3xl font-bold text-gray-800">Bem-vindo ao seu App de Flashcards!</h2>
-            <p class="text-gray-600 mt-2">Crie um novo baralho ou selecione um existente para começar.</p>
-        </div>
-
-        <!-- Tela de Visualização do Baralho (oculta por padrão) -->
-        <div id="deckView" class="hidden flex-1 flex flex-col">
-            <!-- Cabeçalho do Baralho -->
-            <div class="flex justify-between items-center mb-4">
-                <h2 id="currentDeckName" class="text-2xl md:text-3xl font-bold text-gray-800">...</h2>
-                <div>
-                    <button id="addCardBtn" class="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-lg flex items-center">
-                        <svg class="w-5 h-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                        Novo Card
-                    </button>
-                    <button id="deleteDeckBtn" class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg flex items-center ml-2">
-                        <svg class="w-5 h-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12.576 0c.342.052.682.107 1.022.166m11.554 0A48.108 48.108 0 0 0 9.207 5.5a48.108 48.108 0 0 0-3.478.397m12.576 0c.342.052.682.107 1.022.166" /></svg>
-                        Excluir Baralho
-                    </button>
-                </div>
-            </div>
-            <!-- Visualizador do Card -->
-            <div id="cardViewer" class="flex-1 flex flex-col items-center justify-center">
-                <div id="noCardsView" class="text-center hidden">
-                    <p class="text-gray-600">Este baralho está vazio.</p>
-                    <p class="text-gray-500">Clique em "Novo Card" para começar.</p>
-                </div>
-                <div id="cardView" class="w-full max-w-2xl">
-                    <!-- O Card 3D -->
-                    <div id="Flashcard" class="card-container w-full h-64 md:h-80 cursor-pointer mb-4">
-                        <div class="card-inner">
-                            <div class="card-face"><p id="cardFront">Frente do Card</p></div>
-                            <div class="card-back"><p id="cardBack">Verso do Card</p></div>
-                        </div>
-                    </div>
-                    <!-- Navegação -->
-                    <div class="flex justify-between items-center">
-                        <button id="prevCardBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-3 px-5 rounded-lg"><svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" /></svg></button>
-                        <span id="cardProgress" class="text-gray-600 font-medium">1 / 10</span>
-                        <button id="deleteCardBtn" class="text-red-500 hover:text-red-700 p-2"><svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12.576 0c.342.052.682.107 1.022.166m11.554 0A48.108 48.108 0 0 0 9.207 5.5a48.108 48.108 0 0 0-3.478.397m12.576 0c.342.052.682.107 1.022.166" /></svg></button>
-                        <button id="nextCardBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-5 rounded-lg"><svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg></button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </main>
-
-    <!-- Modal: Criar/Editar Card (oculto por padrão) -->
-    <div id="cardModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 hidden z-20">
-        <div class="bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
-            <h2 id="cardModalTitle" class="text-2xl font-bold mb-4">Novo Card</h2>
-            <form id="cardForm">
-                <div class="mb-4">
-                    <label for="cardFrontText" class="block text-sm font-medium text-gray-700 mb-1">Frente</label>
-                    <textarea id="cardFrontText" rows="3" class="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Digite a pergunta ou termo..."></textarea>
-                </div>
-                <div class="mb-6">
-                    <label for="cardBackText" class="block text-sm font-medium text-gray-700 mb-1">Verso</label>
-                    <textarea id="cardBackText" rows="3" class="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Digite a resposta ou definição..."></textarea>
-                </div>
-                <div class="flex justify-end space-x-3">
-                    <button type="button" id="cancelCardBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-lg">Cancelar</button>
-                    <button type="submit" id="saveCardBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg">Salvar</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Modal: Confirmação de Exclusão (oculto por padrão) -->
-    <div id="deleteModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 hidden z-20">
-        <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-            <h2 class="text-xl font-bold mb-4 text-gray-900">Confirmar Exclusão</h2>
-            <p id="deleteModalText" class="text-gray-600 mb-6">Você tem certeza?</p>
-            <div class="flex justify-end space-x-3">
-                <button type="button" id="cancelDeleteBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-lg">Cancelar</button>
-                <button type="button" id="confirmDeleteBtn" class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg">Excluir</button>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Modal: Login Obrigatório -->
-    <div id="loginModal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
-        <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-8 text-center">
-            <h2 class="text-2xl font-bold mb-4 text-gray-900">Login Obrigatório</h2>
-            <p class="text-gray-600 mb-6">Você precisa fazer login com sua conta Google para acessar seus flashcards.</p>
-            <button id="googleLoginButton" class="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 px-4 rounded-lg text-lg font-medium flex items-center justify-center">
-                <svg class="w-6 h-6 mr-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48px" height="48px"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/><path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/><path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571l0.001-0.001l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/></svg>
-                Fazer Login com Google
-            </button>
-        </div>
-    </div>
-    
-    <!-- Modal: Acesso Negado -->
-    <div id="accessDeniedModal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
-        <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-8 text-center">
-            <h2 class="text-2xl font-bold mb-4 text-red-600">Acesso Negado</h2>
-            <p class="text-gray-600 mb-2">Login realizado com sucesso, mas este e-mail não tem permissão para acessar o aplicativo.</p>
-            <p class="text-gray-800 font-medium bg-yellow-100 p-2 rounded break-all" id="deniedEmail">...</p>
-            <p class="text-gray-600 mt-4 mb-6">Por favor, peça ao administrador para adicionar este e-mail à lista de permissões.</p>
-            <button id="logoutDeniedButton" class="w-full bg-red-500 hover:bg-red-600 text-white py-3 px-4 rounded-lg text-lg font-medium">
-                Sair
-            </button>
-        </div>
-    </div>
-
-
-    <!-- Scripts do Firebase -->
-    <script type="module">
-        // Importa as funções necessárias do SDK do Firebase
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { 
-            getAuth, 
-            onAuthStateChanged,
-            GoogleAuthProvider,
-            signInWithPopup,
-            signOut
-        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { 
-            getFirestore, 
-            doc, 
-            collection, 
-            addDoc, 
-            getDocs, 
-            deleteDoc, 
-            onSnapshot, 
-            Timestamp,
-            writeBatch,
-            setLogLevel
-        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // --- Configuração do Firebase ---
-        const firebaseConfig = {
-            apiKey: "COLE_SUA_API_KEY_AQUI",
-            authDomain: "SEU_PROJETO.firebaseapp.com",
-            projectId: "SEU_PROJETO_ID",
-            storageBucket: "SEU_PROJETO.appspot.com",
-            messagingSenderId: "SEU_SENDER_ID",
-            appId: "SEU_APP_ID"
-        };
-        
-        // --- Variáveis Globais ---
-        let app;
-        let auth;
-        let db;
-        let currentUserId = null;
-        let currentUserEmail = null;
-        let currentDeckId = null;
-        let cardsInDeck = [];
-        let currentCardIndex = 0;
-        let unsubscribeDecks = null;
-        let unsubscribeCards = null;
-
-        // --- Elementos da DOM ---
-        const sidebar = document.getElementById('sidebar');
-        const mainContent = document.querySelector('main');
-        const welcomeScreen = document.getElementById('welcomeScreen');
-        const deckView = document.getElementById('deckView');
-        const currentDeckName = document.getElementById('currentDeckName');
-        
-        // Autenticação
-        const authLoading = document.getElementById('auth-loading');
-        const authLoggedin = document.getElementById('auth-loggedin');
-        const userIdDisplayLoggedin = document.getElementById('userIdDisplay-loggedin');
-        const userEmailDisplay = document.getElementById('userEmailDisplay');
-        const logoutButton = document.getElementById('logoutButton');
-
-        // Baralhos
-        const deckNameInput = document.getElementById('deckNameInput');
-        const createDeckBtn = document.getElementById('createDeckBtn');
-        const deckList = document.getElementById('deckList');
-        const noDecksMsg = document.getElementById('noDecksMsg');
-        const deleteDeckBtn = document.getElementById('deleteDeckBtn');
-
-        // Cards
-        const cardViewer = document.getElementById('cardViewer');
-        const noCardsView = document.getElementById('noCardsView');
-        const cardView = document.getElementById('cardView');
-        const addCardBtn = document.getElementById('addCardBtn');
-        const cardProgress = document.getElementById('cardProgress');
-        const Flashcard = document.getElementById('Flashcard');
-        const cardFront = document.getElementById('cardFront');
-        const cardBack = document.getElementById('cardBack');
-        const prevCardBtn = document.getElementById('prevCardBtn');
-        const nextCardBtn = document.getElementById('nextCardBtn');
-        const deleteCardBtn = document.getElementById('deleteCardBtn');
-
-        // Modais
-        const cardModal = document.getElementById('cardModal');
-        const cardModalTitle = document.getElementById('cardModalTitle');
-        const cardForm = document.getElementById('cardForm');
-        const cancelCardBtn = document.getElementById('cancelCardBtn');
-        const saveCardBtn = document.getElementById('saveCardBtn');
-        const cardFrontText = document.getElementById('cardFrontText');
-        const cardBackText = document.getElementById('cardBackText');
-
-        const deleteModal = document.getElementById('deleteModal');
-        const deleteModalText = document.getElementById('deleteModalText');
-        const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
-        const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
-        
-        // Novos Modais (Login/Acesso Negado)
-        const loginModal = document.getElementById('loginModal');
-        const googleLoginButton = document.getElementById('googleLoginButton');
-        const accessDeniedModal = document.getElementById('accessDeniedModal');
-        const deniedEmail = document.getElementById('deniedEmail');
-        const logoutDeniedButton = document.getElementById('logoutDeniedButton');
-        
-        let deleteAction = null;
-
-        // --- Inicialização ---
-        try {
-            app = initializeApp(firebaseConfig);
-            auth = getAuth(app);
-            db = getFirestore(app);
-            setLogLevel('debug');
-            console.log("Firebase inicializado. Aguardando autenticação...");
-            initAuth();
-        } catch (error) {
-            console.error("--- ERRO DE INICIALIZAÇÃO REAL ---", error);
-            if (firebaseConfig.apiKey === "COLE_SUA_API_KEY_AQUI") {
-                 document.body.innerHTML = `<div class="p-8 text-center text-red-600 bg-red-100"><h1>Erro de Configuração</h1><p>Você precisa editar este arquivo e preencher o objeto <strong>firebaseConfig</strong>.</p></div>`;
-            } else {
-                 document.body.innerHTML = `<div class="p-8 text-center text-red-600 bg-red-100"><h1>O App Falhou ao Conectar com o Firebase</h1><p>Erro: ${error.message}</p></div>`;
-            }
+    <script>
+        function getQueryParam(param) {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get(param);
         }
 
-        // --- Autenticação ---
+        const link = getQueryParam('link');
+        const iframe = document.getElementById('appIframe');
+        const errorMessage = document.getElementById('errorMessage');
 
-        function initAuth() {
-            onAuthStateChanged(auth, (user) => {
-                // Esconde todas as telas de "bloqueio"
-                loginModal.classList.add('hidden');
-                accessDeniedModal.classList.add('hidden');
+        if (link) {
+            try {
+                const decodedLink = decodeURIComponent(link);
+                console.log("Link decodificado encontrado: " + decodedLink);
                 
-                if (user) {
-                    // Usuário está logado (com Google)
-                    console.log("Usuário detectado:", user.uid, "Email:", user.email);
-                    currentUserId = user.uid;
-                    currentUserEmail = user.email;
+                // Verifica se o link é https (necessário para GAS)
+                if (decodedLink.startsWith('https://')) {
+                    iframe.src = decodedLink;
                     
-                    // Atualiza a UI da barra lateral
-                    authLoading.classList.add('hidden');
-                    userIdDisplayLoggedin.textContent = user.uid.substring(0, 10) + '...';
-                    userEmailDisplay.textContent = user.email;
-                    authLoggedin.classList.remove('hidden');
-                    
-                    // Mostra o app principal
-                    sidebar.classList.remove('hidden');
-                    mainContent.classList.remove('hidden');
-                    
-                    // Tenta carregar os baralhos. A Regra de Segurança vai verificar a whitelist.
-                    loadDecks(); 
-                    
+                    iframe.onload = function() {
+                        console.log("Iframe carregado com sucesso. URL: " + decodedLink);
+                    };
+
+                    iframe.onerror = function() {
+                        console.error("Erro ao carregar o iframe. URL: " + decodedLink);
+                        iframe.style.display = 'none';
+                        errorMessage.style.display = 'block';
+                        errorMessage.textContent = "Erro: Não foi possível carregar o aplicativo. Verifique o link ou a conexão.";
+                    };
                 } else {
-                    // Usuário não está logado
-                    console.log("Nenhum usuário logado.");
-                    currentUserId = null;
-                    currentUserEmail = null;
-                    
-                    // Limpa a UI e esconde o app
-                    authLoading.classList.remove('hidden');
-                    authLoggedin.classList.add('hidden');
-                    sidebar.classList.add('hidden'); // Esconde o app
-                    mainContent.classList.add('hidden'); // Esconde o app
-                    
-                    // Limpa listeners antigos
-                    if (unsubscribeDecks) unsubscribeDecks();
-                    if (unsubscribeCards) unsubscribeCards();
-                    deckList.innerHTML = '';
-                    noDecksMsg.classList.remove('hidden');
-                    showWelcomeScreen();
-                    
-                    // Mostra o modal de login obrigatório
-                    loginModal.classList.remove('hidden');
+                    throw new Error("Link inválido. O link deve começar com https://");
                 }
-            });
-        }
 
-        // Lógica de Login com Google
-        async function handleLogin() {
-            const provider = new GoogleAuthProvider();
-            try {
-                await signInWithPopup(auth, provider);
-                // O `onAuthStateChanged` vai cuidar do resto.
-            } catch (error) {
-                console.error("Erro durante o login com Google:", error);
-                // Se o popup for fechado, o usuário permanece deslogado e o modal de login continua visível.
+            } catch (e) {
+                console.error("Erro ao decodificar ou validar o link:", e);
+                iframe.style.display = 'none';
+                errorMessage.style.display = 'block';
+                errorMessage.textContent = "Erro: O link fornecido é inválido ou mal formatado.";
             }
-        }
-        
-        // Lógica de Logout
-        function handleLogout() {
-            signOut(auth).catch((error) => {
-                console.error("Erro no logout:", error);
-            });
-            // O `onAuthStateChanged` vai detectar o logout e mostrar o modal de login.
+        } else {
+            console.log("Nenhum parâmetro 'link' encontrado na URL.");
+            iframe.style.display = 'none';
+            errorMessage.style.display = 'block';
         }
 
-
-        // --- Funções do Baralho (Deck) ---
-
-        async function createDeck() {
-            const deckName = deckNameInput.value.trim();
-            if (deckName === "" || !currentUserId) return;
-            try {
-                const deckCol = collection(db, `flashcard_users/${currentUserId}/decks`);
-                await addDoc(deckCol, { name: deckName, createdAt: Timestamp.now() });
-                console.log("Baralho criado:", deckName);
-                deckNameInput.value = "";
-            } catch (error) {
-                console.error("Erro ao criar baralho:", error);
-            }
-        }
-
-        function loadDecks() {
-            if (!currentUserId) return;
-            console.log(`Carregando baralhos para o usuário: ${currentUserId}`);
-
-            if (unsubscribeDecks) unsubscribeDecks(); 
-
-            const deckCol = collection(db, `flashcard_users/${currentUserId}/decks`);
-            
-            unsubscribeDecks = onSnapshot(deckCol, (snapshot) => {
-                // SUCESSO! O usuário está na whitelist.
-                console.log("Acesso à whitelist permitido.");
-                accessDeniedModal.classList.add('hidden'); // Garante que está escondido
-                
-                if (snapshot.empty) {
-                    deckList.innerHTML = '';
-                    noDecksMsg.classList.remove('hidden');
-                    return;
-                }
-                
-                noDecksMsg.classList.add('hidden');
-                deckList.innerHTML = '';
-                
-                snapshot.docs.forEach((doc) => {
-                    const deck = doc.data();
-                    const deckId = doc.id;
-                    const deckElement = document.createElement('button');
-                    deckElement.className = `w-full md:w-auto text-left p-3 rounded-lg text-sm font-medium border
-                                             shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500
-                                             md:flex-grow ${deckId === currentDeckId ? 'bg-blue-100 text-blue-700 ring-2 ring-blue-500' : 'bg-white text-gray-700'}`;
-                    deckElement.textContent = deck.name;
-                    deckElement.dataset.id = deckId;
-                    deckElement.onclick = () => selectDeck(deckId, deck.name);
-                    deckList.appendChild(deckElement);
-                });
-            }, (error) => {
-                // ERRO! Provavelmente Acesso Negado pela Whitelist
-                console.error("Erro ao carregar baralhos (verificar whitelist):", error.code);
-                
-                if (error.code === 'permission-denied') {
-                    // O usuário logou, mas o e-mail dele não está na whitelist
-                    console.warn(`Acesso negado para o e-mail: ${currentUserEmail}`);
-                    deniedEmail.textContent = currentUserEmail;
-                    accessDeniedModal.classList.remove('hidden');
-                    // Esconde o app principal
-                    sidebar.classList.add('hidden');
-                    mainContent.classList.add('hidden');
-                }
-            });
-        }
-
-        function selectDeck(deckId, deckName) {
-            console.log(`Baralho selecionado: ${deckName} (${deckId})`);
-            currentDeckId = deckId;
-            currentDeckName.textContent = deckName;
-            
-            Array.from(deckList.children).forEach(child => {
-                if (child.dataset.id === deckId) {
-                    child.classList.add('bg-blue-100', 'text-blue-700', 'ring-2', 'ring-blue-500');
-                    child.classList.remove('bg-white', 'text-gray-700');
-                } else {
-                    child.classList.remove('bg-blue-100', 'text-blue-700', 'ring-2', 'ring-blue-500');
-                    child.classList.add('bg-white', 'text-gray-700');
-                }
-            });
-
-            welcomeScreen.classList.add('hidden');
-            deckView.classList.remove('hidden');
-            deckView.classList.add('flex');
-            
-            loadCards(deckId);
-        }
-        
-        async function deleteDeck() {
-            if (!currentUserId || !currentDeckId) return;
-            const deckIdToDelete = currentDeckId;
-            const deckName = currentDeckName.textContent;
-            
-            try {
-                // Excluir subcoleção de cartões
-                const cardCol = collection(db, `flashcard_users/${currentUserId}/decks/${deckIdToDelete}/cards`);
-                const cardSnapshot = await getDocs(cardCol);
-                const batch = writeBatch(db);
-                cardSnapshot.forEach(doc => batch.delete(doc.ref));
-                await batch.commit();
-                console.log(`${cardSnapshot.size} cartões excluídos.`);
-
-                // Excluir baralho
-                const deckDoc = doc(db, `flashcard_users/${currentUserId}/decks/${deckIdToDelete}`);
-                await deleteDoc(deckDoc);
-                console.log("Baralho excluído com sucesso.");
-                showWelcomeScreen();
-            } catch (error) {
-                console.error("Erro ao excluir baralho:", error);
-            }
-        }
-
-        // --- Funções do Cartão (Card) ---
-
-        function loadCards(deckId) {
-            if (!currentUserId || !deckId) return;
-            if (unsubscribeCards) unsubscribeCards();
-            
-            const cardCol = collection(db, `flashcard_users/${currentUserId}/decks/${deckId}/cards`);
-            unsubscribeCards = onSnapshot(cardCol, (snapshot) => {
-                if (snapshot.empty) {
-                    cardsInDeck = [];
-                    currentCardIndex = 0;
-                    showNoCardsView();
-                    return;
-                }
-                
-                cardsInDeck = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                console.log(`Carregados ${cardsInDeck.length} cartões.`);
-                currentCardIndex = 0;
-                showCardView();
-                displayCurrentCard();
-            }, (error) => {
-                console.error("Erro ao carregar cartões:", error);
-            });
-        }
-        
-        async function saveCard(e) {
-            e.preventDefault();
-            const front = cardFrontText.value.trim();
-            const back = cardBackText.value.trim();
-            if (front === "" || back === "" || !currentUserId || !currentDeckId) return;
-            try {
-                const cardCol = collection(db, `flashcard_users/${currentUserId}/decks/${currentDeckId}/cards`);
-                await addDoc(cardCol, { front: front, back: back, createdAt: Timestamp.now() });
-                console.log("Cartão salvo com sucesso.");
-                closeCardModal();
-            } catch (error) {
-                console.error("Erro ao salvar cartão:", error);
-            }
-        }
-        
-        async function deleteCard() {
-             if (!currentUserId || !currentDeckId || cardsInDeck.length === 0) return;
-             const cardToDelete = cardsInDeck[currentCardIndex];
-             try {
-                const cardDoc = doc(db, `flashcard_users/${currentUserId}/decks/${currentDeckId}/cards/${cardToDelete.id}`);
-                await deleteDoc(cardDoc);
-                console.log("Cartão excluído com sucesso.");
-                if (currentCardIndex >= cardsInDeck.length - 1) {
-                    currentCardIndex = Math.max(0, cardsInDeck.length - 2);
-                }
-                displayCurrentCard();
-             } catch(error) {
-                 console.error("Erro ao excluir cartão:", error);
-             }
-        }
-
-        // --- Funções de UI (Interface do Usuário) ---
-
-        function showWelcomeScreen() {
-            currentDeckId = null;
-            welcomeScreen.classList.remove('hidden');
-            deckView.classList.add('hidden');
-            Array.from(deckList.children).forEach(child => {
-                child.classList.remove('bg-blue-100', 'text-blue-700', 'ring-2', 'ring-blue-500');
-                child.classList.add('bg-white', 'text-gray-700');
-            });
-            if (unsubscribeCards) unsubscribeCards();
-            cardsInDeck = [];
-        }
-
-        function showNoCardsView() {
-            cardViewer.classList.remove('hidden');
-            noCardsView.classList.remove('hidden');
-            cardView.classList.add('hidden');
-        }
-
-        function showCardView() {
-            cardViewer.classList.remove('hidden');
-            noCardsView.classList.add('hidden');
-            cardView.classList.remove('hidden');
-        }
-        
-        function displayCurrentCard() {
-            if (cardsInDeck.length === 0) {
-                showNoCardsView();
-                return;
-            }
-            const card = cardsInDeck[currentCardIndex];
-            cardFront.textContent = card.front;
-            cardBack.textContent = card.back;
-            cardProgress.textContent = `${currentCardIndex + 1} / ${cardsInDeck.length}`;
-            Flashcard.classList.remove('flipped');
-        }
-
-        function showPrevCard() {
-            if (cardsInDeck.length === 0) return;
-            currentCardIndex = (currentCardIndex - 1 + cardsInDeck.length) % cardsInDeck.length;
-            displayCurrentCard();
-        }
-
-        function showNextCard() {
-            if (cardsInDeck.length === 0) return;
-            currentCardIndex = (currentCardIndex + 1) % cardsInDeck.length;
-            displayCurrentCard();
-        }
-        
-        function flipCard() { Flashcard.classList.toggle('flipped'); }
-        function openCardModal() {
-            cardForm.reset();
-            cardModalTitle.textContent = "Novo Card";
-            cardModal.classList.remove('hidden');
-        }
-        function closeCardModal() { cardModal.classList.add('hidden'); }
-
-        function openDeleteModal(type) {
-            if (type === 'deck') {
-                deleteModalText.textContent = `Você tem certeza que quer excluir o baralho "${currentDeckName.textContent}"? Todos os cartões dentro dele serão perdidos permanentemente.`;
-                deleteAction = deleteDeck;
-            } else if (type === 'card') {
-                deleteModalText.textContent = "Você tem certeza que quer excluir este cartão?";
-                deleteAction = deleteCard;
-            }
-            deleteModal.classList.remove('hidden');
-        }
-        function closeDeleteModal() {
-            deleteModal.classList.add('hidden');
-            deleteAction = null;
-        }
-
-        // --- Event Listeners ---
-        
-        // Autenticação
-        googleLoginButton.addEventListener('click', handleLogin);
-        logoutButton.addEventListener('click', handleLogout);
-        logoutDeniedButton.addEventListener('click', handleLogout);
-
-        // Baralhos
-        createDeckBtn.addEventListener('click', createDeck);
-        deleteDeckBtn.addEventListener('click', () => openDeleteModal('deck'));
-
-        // Cards
-        addCardBtn.addEventListener('click', openCardModal);
-        Flashcard.addEventListener('click', flipCard);
-        prevCardBtn.addEventListener('click', showPrevCard);
-        nextCardBtn.addEventListener('click', showNextCard);
-        deleteCardBtn.addEventListener('click', () => openDeleteModal('card'));
-
-        // Modais
-        cardForm.addEventListener('submit', saveCard);
-        cancelCardBtn.addEventListener('click', closeCardModal);
-        cancelDeleteBtn.addEventListener('click', closeDeleteModal);
-        confirmDeleteBtn.addEventListener('click', () => {
-            if (typeof deleteAction === 'function') deleteAction();
-            closeDeleteModal();
-        });
-
+        // Remove o ajuste de altura fixo e deixa o CSS cuidar disso
+        // O CSS com height: 100% no html, body, e iframe já faz o trabalho.
     </script>
 </body>
 </html>
-
