@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <!-- A tag de viewport será adicionada pelo Code.gs, mas é bom ter aqui por segurança -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- IMPORTANTE: O <base target="_top"> é recomendado pelo Google 
+         para links externos abrirem fora do iframe. -->
+    <base target="_top">
+    
+    <title>Meu App de Flashcards</title>
+    <!-- Carrega o Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Carrega a fonte Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Estilo para a cena 3D da perspectiva do cartão */
+        .scene {
+            perspective: 600px;
+        }
+        /* Estilo para o cartão que vira */
+        .card {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.6s;
+        }
+        .card.is-flipped {
+            transform: rotateY(180deg);
+        }
+        /* Estilos para a frente e o verso do cartão */
+        .card-face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+        .card-face-front {
+            background-color: white;
+            color: #1f2937; /* text-gray-800 */
+        }
+        .card-face-back {
+            background-color: #3b82f6; /* bg-blue-500 */
+            color: white;
+            transform: rotateY(180deg);
+        }
+        /* Garante que o app preencha o iframe */
+        html, body {
+            min-height: 100vh;
+            width: 100%;
+            box-sizing: border-box;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-900">
+
+    <!-- Container Principal -->
+    <div class="flex flex-col md:flex-row min-h-screen">
+
+        <!-- Barra Lateral (Gerenciamento de Baralhos) -->
+        <aside class="w-full md:w-72 bg-white shadow-lg p-6 flex-shrink-0">
+            <h1 class="text-2xl font-bold text-blue-600 mb-6">Meus Baralhos</h1>
+
+            <!-- Informação do Usuário -->
+            <div class="mb-4 p-2 bg-gray-100 rounded-lg">
+                <span class="text-xs font-medium text-gray-600">Seu ID de Usuário:</span>
+                <p id="userIdDisplay" class="text-xs text-gray-800 break-all">Carregando...</p>
+            </div>
+
+            <!-- Formulário para Novo Baralho -->
+            <form id="deckForm" class="mb-6">
+                <label for="deckName" class="block text-sm font-medium text-gray-700 mb-1">Novo Baralho</label>
+                <input type="text" id="deckName" name="deckName" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" placeholder="Nome do Baralho" required>
+                <button type="submit" class="w-full mt-3 px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                    Criar Baralho
+                </button>
+            </form>
+
+            <!-- Lista de Baralhos -->
+            <h2 class="text-lg font-semibold text-gray-800 mb-3">Baralhos Salvos</h2>
+            <ul id="deckList" class="space-y-2 overflow-y-auto" style="max-height: calc(100vh - 300px);">
+                <!-- Baralhos serão inseridos aqui pelo JS -->
+                <li class="text-gray-500">Nenhum baralho encontrado.</li>
+            </ul>
+        </aside>
+
+        <!-- Área Principal (Visualizador de Flashcards) -->
+        <main class="flex-1 p-6 md:p-10">
+            <div id="welcomeMessage" class="flex flex-col items-center justify-center h-full text-center">
+                <h2 class="text-3xl font-bold text-gray-700">Bem-vindo ao seu App de Flashcards!</h2>
+                <p class="text-lg text-gray-500 mt-2">Crie um novo baralho ou selecione um existente para começar.</p>
+            </div>
+
+            <!-- Conteúdo do Baralho Selecionado (oculto por padrão) -->
+            <div id="deckContent" class="hidden h-full">
+                <!-- Header do Baralho -->
+                <div class="flex flex-col sm:flex-row justify-between sm:items-center mb-6">
+                    <h2 id="currentDeckName" class="text-3xl font-bold text-gray-800"></h2>
+                    <button id="deleteDeckBtn" class="mt-2 sm:mt-0 px-4 py-2 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
+                        Excluir Baralho
+                    </button>
+                </div>
+
+                <!-- Área de Flashcard e Formulário -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 h-full">
+
+                    <!-- Visualizador de Flashcard -->
+                    <div class="lg:col-span-2 flex flex-col items-center">
+                        <p id="cardProgress" class="text-lg font-medium text-gray-600 mb-4"></p>
+                        
+                        <!-- Cena 3D para o cartão -->
+                        <div class="scene w-full max-w-xl h-64 md:h-80 mb-6">
+                            <div id="flashcard" class="card cursor-pointer">
+                                <div id="cardFront" class="card-face card-face-front">
+                                    <p class="text-2xl md:text-3xl font-medium text-center"></p>
+                                </div>
+                                <div id="cardBack" class="card-face card-face-back">
+                                    <p class="text-2xl md:text-3xl font-medium text-center"></p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Navegação de Cartões -->
+                        <div class="flex items-center space-x-4">
+                            <button id="prevCardBtn" class="px-5 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg shadow hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2">
+                                Anterior
+                            </button>
+                            <button id="deleteCardBtn" class="px-5 py-2 bg-red-100 text-red-700 font-semibold rounded-lg shadow hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2">
+                                Excluir Cartão
+                            </button>
+                            <button id="nextCardBtn" class="px-5 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg shadow hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2">
+                                Próximo
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Formulário para Novo Cartão -->
+                    <div class="lg:col-span-1 bg-white p-6 rounded-lg shadow-lg">
+                        <h3 class="text-xl font-semibold mb-4">Adicionar Novo Cartão</h3>
+                        <form id="cardForm" class="space-y-4">
+                            <div>
+                                <label for="cardFrontText" class="block text-sm font-medium text-gray-700 mb-1">Frente</label>
+                                <textarea id="cardFrontText" name="cardFrontText" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" placeholder="Texto da frente" required></textarea>
+                            </div>
+                            <div>
+                                <label for="cardBackText" class="block text-sm font-medium text-gray-700 mb-1">Verso</label>
+                                <textarea id="cardBackText" name="cardBackText" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" placeholder="Texto do verso" required></textarea>
+                            </div>
+                            <button type="submit" class="w-full px-4 py-2 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">
+                                Adicionar Cartão
+                            </button>
+                        </form>
+                    </div>
+
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal de Confirmação (oculto por padrão) -->
+    <div id="deleteModal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm">
+            <h3 class="text-lg font-bold text-gray-900 mb-4">Confirmar Exclusão</h3>
+            <p id="deleteModalText" class="text-gray-600 mb-6">Você tem certeza que deseja excluir este item? Esta ação não pode ser desfeita.</p>
+            <div class="flex justify-end space-x-3">
+                <button id="cancelDeleteBtn" class="px-4 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 focus:outline-none">
+                    Cancelar
+                </button>
+                <button id="confirmDeleteBtn" class="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 focus:outline-none">
+                    Excluir
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Scripts do Firebase -->
+    <script type="module">
+        // Importa as funções necessárias do SDK do Firebase
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { 
+            getAuth, 
+            signInAnonymously, 
+            signInWithCustomToken, 
+            onAuthStateChanged 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, 
+            doc, 
+            getDoc, 
+            setDoc, 
+            updateDoc, 
+            deleteDoc, 
+            onSnapshot, 
+            collection, 
+            query, 
+            addDoc,
+            writeBatch,
+            getDocs,
+            setLogLevel
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Configuração do Firebase ---
+        // As variáveis __firebase_config, __app_id, e __initial_auth_token são injetadas pelo ambiente.
+        
+        // No ambiente GAS, essas variáveis não existirão. 
+        // Você PRECISA substituir pelos seus próprios valores do Firebase.
+        // CRIE SEU PROJETO NO FIREBASE: https://console.firebase.google.com/
+        
+        const firebaseConfig = {
+            apiKey: "COLE_SUA_API_KEY_AQUI",
+            authDomain: "SEU_PROJETO.firebaseapp.com",
+            projectId: "SEU_PROJETO_ID",
+            storageBucket: "SEU_PROJETO.appspot.com",
+            messagingSenderId: "SEU_SENDER_ID",
+            appId: "SEU_APP_ID"
+        };
+        
+        // Como estamos no GAS, não temos __app_id ou __initial_auth_token
+        // Vamos usar um ID de app fixo e login anônimo.
+        const appId = 'meu-app-flashcards-gas'; // Um ID fixo para este app
+        const __initial_auth_token = undefined; // Força o login anônimo
+
+        let app;
+        let auth;
+        let db;
+        let currentUserId = null;
+        let unsubscribeDecks = () => {};
+        let unsubscribeCards = () => {};
+
+        // --- Estado da Aplicação ---
+        let decks = [];
+        let currentCards = [];
+        let currentDeck = null; // { id, name }
+        let currentCardIndex = 0;
+        let isCardFlipped = false;
+        
+        // --- Referências do DOM ---
+        const deckForm = document.getElementById('deckForm');
+        const deckNameInput = document.getElementById('deckName');
+        const deckList = document.getElementById('deckList');
+        const userIdDisplay = document.getElementById('userIdDisplay');
+        
+        const welcomeMessage = document.getElementById('welcomeMessage');
+        const deckContent = document.getElementById('deckContent');
+        const currentDeckName = document.getElementById('currentDeckName');
+        const deleteDeckBtn = document.getElementById('deleteDeckBtn');
+        
+        const cardForm = document.getElementById('cardForm');
+        const cardFrontTextInput = document.getElementById('cardFrontText');
+        const cardBackTextInput = document.getElementById('cardBackText');
+        
+        const cardProgress = document.getElementById('cardProgress');
+        const flashcard = document.getElementById('flashcard');
+        const cardFront = document.getElementById('cardFront').querySelector('p');
+        const cardBack = document.getElementById('cardBack').querySelector('p');
+        
+        const prevCardBtn = document.getElementById('prevCardBtn');
+        const nextCardBtn = document.getElementById('nextCardBtn');
+        const deleteCardBtn = document.getElementById('deleteCardBtn');
+
+        // Modal
+        const deleteModal = document.getElementById('deleteModal');
+        const deleteModalText = document.getElementById('deleteModalText');
+        const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
+        const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+        
+        let deleteAction = null; // Função a ser executada na confirmação
+
+        // --- Inicialização ---
+        try {
+            // VERIFIQUE SE VOCÊ PREENCHEU O firebaseConfig ACIMA
+            if(firebaseConfig.apiKey === "COLE_SUA_API_KEY_AQUI") {
+                 console.error("ERRO: Configure o 'firebaseConfig' neste arquivo (flashcards.html) com os dados do seu projeto Firebase.");
+                 document.body.innerHTML = `<div class="p-8 text-center text-red-600 bg-red-100"><h1>Erro de Configuração</h1><p>Você precisa editar o arquivo <strong>flashcards.html</strong> e preencher o objeto <strong>firebaseConfig</strong> com os dados do seu projeto Firebase para que o app funcione.</p></div>`;
+            } else {
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                setLogLevel('debug'); // Ativa logs detalhados do Firestore
+                console.log("Firebase inicializado com sucesso.");
+                initAuth();
+            }
+        } catch (error) {
+            console.error("Erro ao inicializar o Firebase:", error);
+            userIdDisplay.textContent = "Erro de conexão.";
+        }
+
+        // --- Autenticação ---
+        async function initAuth() {
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    console.log("Usuário autenticado:", user.uid);
+                    currentUserId = user.uid;
+                    userIdDisplay.textContent = currentUserId;
+                    // Usuário está logado, carregar seus dados
+                    loadDecks();
+                } else {
+                    console.log("Nenhum usuário logado. Tentando login anônimo...");
+                    currentUserId = null;
+                    userIdDisplay.textContent = "Autenticando...";
+                    unsubscribeDecks(); // Para de ouvir dados antigos
+                    unsubscribeCards();
+                    try {
+                        // Força login anônimo
+                        await signInAnonymously(auth);
+                        console.log("Login anônimo bem-sucedido.");
+                        // O onAuthStateChanged será disparado novamente com o novo usuário
+                    } catch (error) {
+                        console.error("Erro durante a autenticação anônima:", error);
+                        userIdDisplay.textContent = "Falha na autenticação.";
+                    }
+                }
+            });
+        }
+
+        // --- Funções do Modal de Exclusão ---
+        function showDeleteModal(message, onConfirm) {
+            deleteModalText.textContent = message;
+            deleteAction = onConfirm; // Armazena a ação
+            deleteModal.classList.remove('hidden');
+        }
+
+        function hideDeleteModal() {
+            deleteModal.classList.add('hidden');
+            deleteAction = null;
+        }
+
+        cancelDeleteBtn.addEventListener('click', hideDeleteModal);
+        confirmDeleteBtn.addEventListener('click', () => {
+            if (typeof deleteAction === 'function') {
+                deleteAction(); // Executa a ação armazenada
+            }
+            hideDeleteModal();
+        });
+
+
+        // --- Funções de Baralho (Deck) ---
+        
+        // ATENÇÃO: A ESTRUTURA DE DADOS MUDOU.
+        // Como não temos __app_id e __initial_auth_token,
+        // vamos usar o login anônimo e salvar os dados privados do usuário.
+        
+        function getDecksCollection() {
+            if (!currentUserId) return null;
+            // Salva os baralhos em uma coleção privada do usuário logado anonimamente
+            // Você precisará configurar as Regras de Segurança do Firestore
+            // para permitir isso.
+            return collection(db, `flashcard_users/${currentUserId}/decks`);
+        }
+        
+        function getCardsCollection(deckId) {
+             if (!currentUserId || !deckId) return null;
+            return collection(db, `flashcard_users/${currentUserId}/decks/${deckId}/cards`);
+        }
+
+        function loadDecks() {
+            const decksCol = getDecksCollection();
+            if (!decksCol) {
+                console.warn("Não é possível carregar baralhos: usuário não autenticado.");
+                return;
+            }
+
+            console.log(`Ouvindo a coleção de baralhos em: ${decksCol.path}`);
+            
+            // Cancela o listener anterior antes de criar um novo
+            unsubscribeDecks(); 
+            
+            unsubscribeDecks = onSnapshot(query(decksCol), (snapshot) => {
+                console.log(`Recebidos ${snapshot.docs.length} baralhos.`);
+                decks = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    name: doc.data().name
+                }));
+                // Ordena os baralhos por nome (opcional, mas bom para UI)
+                decks.sort((a, b) => a.name.localeCompare(b.name));
+                renderDeckList();
+            }, (error) => {
+                console.error("Erro ao carregar baralhos (onSnapshot):", error);
+            });
+        }
+
+        function renderDeckList() {
+            deckList.innerHTML = ''; // Limpa a lista
+            if (decks.length === 0) {
+                deckList.innerHTML = '<li class="text-gray-500">Nenhum baralho encontrado.</li>';
+                return;
+            }
+
+            decks.forEach(deck => {
+                const li = document.createElement('li');
+                li.className = `px-3 py-2 rounded-lg cursor-pointer hover:bg-blue-100 ${currentDeck && currentDeck.id === deck.id ? 'bg-blue-100 font-semibold text-blue-700' : 'text-gray-700'}`;
+                li.textContent = deck.name;
+                li.dataset.deckId = deck.id;
+                
+                li.addEventListener('click', () => {
+                    // Remove o destaque do baralho antigo
+                    document.querySelector('#deckList li.bg-blue-100')?.classList.remove('bg-blue-100', 'font-semibold', 'text-blue-700');
+                    // Adiciona destaque ao novo
+                    li.classList.add('bg-blue-100', 'font-semibold', 'text-blue-700');
+                    selectDeck(deck.id, deck.name);
+                });
+                
+                deckList.appendChild(li);
+            });
+        }
+
+        deckForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const deckName = deckNameInput.value.trim();
+            const decksCol = getDecksCollection();
+
+            if (deckName && decksCol) {
+                try {
+                    console.log(`Criando baralho: ${deckName}`);
+                    await addDoc(decksCol, {
+                        name: deckName,
+                        createdAt: new Date() // Adiciona um timestamp
+                    });
+                    deckNameInput.value = '';
+                    console.log("Baralho criado com sucesso.");
+                } catch (error) {
+                    console.error("Erro ao criar baralho:", error);
+                }
+            }
+        });
+
+        function selectDeck(deckId, deckName) {
+            console.log(`Selecionando baralho: ${deckName} (ID: ${deckId})`);
+            currentDeck = { id: deckId, name: deckName };
+            currentCardIndex = 0;
+            isCardFlipped = false;
+            
+            currentDeckName.textContent = deckName;
+            welcomeMessage.classList.add('hidden');
+            deckContent.classList.remove('hidden');
+
+            loadCards(deckId); // Carrega os cartões para este baralho
+        }
+
+        deleteDeckBtn.addEventListener('click', () => {
+            if (!currentDeck) return;
+            
+            showDeleteModal(`Tem certeza que quer excluir o baralho "${currentDeck.name}"? Todos os cartões dentro dele serão perdidos.`, async () => {
+                console.log(`Excluindo baralho: ${currentDeck.id}`);
+                const deckRef = doc(db, `flashcard_users/${currentUserId}/decks/${currentDeck.id}`);
+                
+                try {
+                    // 1. Excluir subcoleção de cartões (Firestore não exclui subcoleções automaticamente)
+                    const cardsCol = getCardsCollection(currentDeck.id);
+                    if (cardsCol) {
+                        const cardsSnapshot = await getDocs(cardsCol);
+                        const batch = writeBatch(db);
+                        cardsSnapshot.docs.forEach((cardDoc) => {
+                            batch.delete(cardDoc.ref);
+                        });
+                        await batch.commit();
+                        console.log(`Subcoleção de ${cardsSnapshot.docs.length} cartões excluída.`);
+                    }
+
+                    // 2. Excluir o documento do baralho
+                    await deleteDoc(deckRef);
+                    console.log("Baralho excluído com sucesso.");
+
+                    // 3. Resetar UI
+                    resetDeckView();
+                    // a lista de baralhos será atualizada automaticamente pelo onSnapshot
+                    
+                } catch (error) {
+                    console.error("Erro ao excluir baralho ou seus cartões:", error);
+                }
+            });
+        });
+
+        function resetDeckView() {
+            currentDeck = null;
+            currentCards = [];
+            currentCardIndex = 0;
+            unsubscribeCards(); // Para de ouvir os cartões do baralho antigo
+            deckContent.classList.add('hidden');
+            welcomeMessage.classList.remove('hidden');
+            document.querySelector('#deckList li.bg-blue-100')?.classList.remove('bg-blue-100', 'font-semibold', 'text-blue-700');
+        }
+
+        // --- Funções de Cartão (Card) ---
+
+        function loadCards(deckId) {
+            const cardsCol = getCardsCollection(deckId);
+            if (!cardsCol) {
+                console.warn("Não é possível carregar cartões: coleção inválida.");
+                return;
+            }
+            
+            console.log(`Ouvindo a coleção de cartões em: ${cardsCol.path}`);
+            
+            // Cancela o listener anterior
+            unsubscribeCards();
+            
+            unsubscribeCards = onSnapshot(query(cardsCol), (snapshot) => {
+                console.log(`Recebidos ${snapshot.docs.length} cartões.`);
+                currentCards = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+                
+                // Embaralha os cartões (opcional, mas bom para estudo)
+                // currentCards = shuffleArray(currentCards); 
+
+                // Ajusta o índice se o cartão atual foi excluído
+                if (currentCardIndex >= currentCards.length) {
+                    currentCardIndex = Math.max(0, currentCards.length - 1);
+                }
+                
+                renderCurrentCard();
+            }, (error) => {
+                console.error("Erro ao carregar cartões (onSnapshot):", error);
+            });
+        }
+        
+        function renderCurrentCard() {
+            if (!currentDeck || currentCards.length === 0) {
+                cardFront.textContent = "Nenhum cartão neste baralho.";
+                cardBack.textContent = "Adicione um cartão para começar.";
+                cardProgress.textContent = "0 / 0";
+                flipCard(false); // Garante que está virado para frente
+                // Desabilita botões se não houver cartões
+                prevCardBtn.disabled = true;
+                nextCardBtn.disabled = true;
+                deleteCardBtn.disabled = true;
+                flashcard.classList.remove('cursor-pointer');
+                return;
+            }
+            
+            // Habilita botões
+            prevCardBtn.disabled = false;
+            nextCardBtn.disabled = false;
+            deleteCardBtn.disabled = false;
+            flashcard.classList.add('cursor-pointer');
+
+            const card = currentCards[currentCardIndex];
+            cardFront.textContent = card.front;
+            cardBack.textContent = card.back;
+            cardProgress.textContent = `${currentCardIndex + 1} / ${currentCards.length}`;
+
+            flipCard(false); // Mostra a frente do novo cartão
+        }
+
+        cardForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const front = cardFrontTextInput.value.trim();
+            const back = cardBackTextInput.value.trim();
+            const cardsCol = getCardsCollection(currentDeck.id);
+
+            if (front && back && cardsCol) {
+                try {
+                    console.log("Adicionando cartão...");
+                    await addDoc(cardsCol, {
+                        front: front,
+                        back: back,
+                        createdAt: new Date()
+                    });
+                    cardFrontTextInput.value = '';
+                    cardBackTextInput.value = '';
+                    console.log("Cartão adicionado com sucesso.");
+                } catch (error) {
+                    console.error("Erro ao adicionar cartão:", error);
+                }
+            }
+        });
+
+        flashcard.addEventListener('click', () => {
+            if (currentCards.length > 0) {
+                flipCard(); // Vira o cartão
+            }
+        });
+
+        function flipCard(forceState = null) {
+            if (forceState !== null) {
+                isCardFlipped = forceState;
+            } else {
+                isCardFlipped = !isCardFlipped;
+            }
+            
+            if (isCardFlipped) {
+                flashcard.classList.add('is-flipped');
+            } else {
+                flashcard.classList.remove('is-flipped');
+            }
+        }
+
+        nextCardBtn.addEventListener('click', () => {
+            if (currentCards.length > 0) {
+                currentCardIndex = (currentCardIndex + 1) % currentCards.length;
+                renderCurrentCard();
+            }
+        });
+
+        prevCardBtn.addEventListener('click', () => {
+            if (currentCards.length > 0) {
+                currentCardIndex = (currentCardIndex - 1 + currentCards.length) % currentCards.length;
+                renderCurrentCard();
+            }
+        });
+
+        deleteCardBtn.addEventListener('click', () => {
+            if (!currentDeck || currentCards.length === 0) return;
+            
+            const cardToDelete = currentCards[currentCardIndex];
+            showDeleteModal("Tem certeza que quer excluir este cartão?", async () => {
+                console.log(`Excluindo cartão: ${cardToDelete.id}`);
+                const cardRef = doc(db, `flashcard_users/${currentUserId}/decks/${currentDeck.id}/cards/${cardToDelete.id}`);
+                try {
+                    await deleteDoc(cardRef);
+                    console.log("Cartão excluído com sucesso.");
+                    // O onSnapshot cuidará de atualizar a UI e o currentCardIndex
+                } catch (error) {
+                    console.error("Erro ao excluir cartão:", error);
+                }
+            });
+        });
+
+
+    </script>
+</body>
+</html>
+
